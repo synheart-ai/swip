@@ -1,0 +1,60 @@
+name: swip
+description: Synheart Wellness Impact Protocol - Flutter SDK
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Core dependencies
+  cupertino_icons: ^1.0.2
+  http: ^1.1.0
+  json_annotation: ^4.8.1
+  
+  # Health and sensors
+  health: ^10.0.0
+  sensors_plus: ^4.0.2
+  
+  # Permissions
+  permission_handler: ^11.0.1
+  
+  # Crypto
+  crypto: ^3.0.3
+  
+  # Logging
+  logger: ^2.0.2+1
+  
+  # Hardware connectivity via Synheart Wear
+  synheart_wear: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # Testing
+  mockito: ^5.4.2
+  build_runner: ^2.4.7
+  json_serializable: ^6.7.1
+  
+  # Linting
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/images/
+    - assets/icons/
+  
+  # Fonts
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700

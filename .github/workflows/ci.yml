@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        platform: [ios, android, flutter, react-native]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test -- --platform=${{ matrix.platform }}
+    
+    - name: Run linting
+      run: npm run lint -- --platform=${{ matrix.platform }}
+    
+    - name: Build
+      run: npm run build -- --platform=${{ matrix.platform }}
+
+  validate-specs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install validation tools
+      run: |
+        cd tools/hrv-validator
+        pip install -r requirements.txt
+    
+    - name: Validate SWIP specification
+      run: |
+        cd tools/hrv-validator
+        python validate_spec.py ../specs/SWIP-1.0-Spec.md
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run security scan
+      uses: github/super-linter@v4
+      env:
+        DEFAULT_BRANCH: main
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VALIDATE_ALL_CODEBASE: true

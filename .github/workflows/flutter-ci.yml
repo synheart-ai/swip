@@ -1,0 +1,107 @@
+name: Flutter SDK CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdks/flutter/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdks/flutter/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+    
+    - name: Install dependencies
+      run: |
+        cd sdks/flutter
+        flutter pub get
+    
+    - name: Verify formatting
+      run: |
+        cd sdks/flutter
+        flutter format --set-exit-if-changed .
+    
+    - name: Analyze project source
+      run: |
+        cd sdks/flutter
+        flutter analyze
+    
+    - name: Run tests
+      run: |
+        cd sdks/flutter
+        flutter test --coverage
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: sdks/flutter/coverage/lcov.info
+        flags: flutter
+        name: flutter-sdk
+        fail_ci_if_error: false
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+    
+    - name: Install dependencies
+      run: |
+        cd sdks/flutter
+        flutter pub get
+    
+    - name: Build for Android
+      run: |
+        cd sdks/flutter
+        flutter build apk --debug
+    
+    - name: Build for iOS (macOS only)
+      if: runner.os == 'macOS'
+      run: |
+        cd sdks/flutter
+        flutter build ios --debug --no-codesign
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+    
+    - name: Install dependencies
+      run: |
+        cd sdks/flutter
+        flutter pub get
+    
+    - name: Publish to pub.dev
+      run: |
+        cd sdks/flutter
+        flutter pub publish --dry-run
+      env:
+        PUB_TOKEN: ${{ secrets.PUB_TOKEN }}
