@@ -28,8 +28,8 @@ dependencies:
   # Logging
   logger: ^2.0.2+1
   
-  # Hardware connectivity via Synheart Wear
-  synheart_wear: ^0.1.0
+  # Hardware connectivity via Synheart Wear (optional - will use mock if not available)
+  # synheart_wear: ^0.1.0
 
 dev_dependencies:
   flutter_test:
@@ -45,16 +45,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
+
   # Assets
   assets:
-    - assets/images/
-    - assets/icons/
-  
-  # Fonts
-  fonts:
-    - family: Roboto
-      fonts:
-        - asset: assets/fonts/Roboto-Regular.ttf
-        - asset: assets/fonts/Roboto-Bold.ttf
-          weight: 700
+    - assets/ml/

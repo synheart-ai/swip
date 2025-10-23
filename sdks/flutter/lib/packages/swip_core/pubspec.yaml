@@ -1,0 +1,17 @@
+name: swip_core
+description: SWIP SDK core – integrates with synheart_wear, computes SDNN, runs small model, outputs SWIP score.
+version: 0.1.0
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  collection: ^1.18.0
+  meta: ^1.12.0
+  synheart_wear:
+    git:
+      url: https://github.com/synheart-ai/synheart_wear.git
+      path: sdks/flutter/packages/synheart_wear
+
+flutter:
+  assets:
+    - assets/models/svm_linear_v1_0.json

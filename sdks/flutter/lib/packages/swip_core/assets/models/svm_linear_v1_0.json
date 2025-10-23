@@ -1,0 +1,70 @@
+{
+  "model_id": "svm_linear_v1_0",
+  "format": "svm_json",
+  "w": [
+    0.12,
+    0.25,
+    -0.1,
+    -0.05
+  ],
+  "b": -0.1,
+  "schema": {
+    "input_names": [
+      "hr_mean",
+      "sdnn_ms",
+      "accel_mag_mean",
+      "accel_mag_std"
+    ],
+    "input_units": [
+      "bpm",
+      "ms",
+      "g",
+      "g"
+    ],
+    "order_fixed": true,
+    "normalization": {
+      "type": "zscore",
+      "mean": [
+        72.0,
+        50.0,
+        0.08,
+        0.02
+      ],
+      "std": [
+        10.0,
+        20.0,
+        0.03,
+        0.01
+      ]
+    }
+  },
+  "output": {
+    "type": "probability",
+    "range": [
+      0,
+      1
+    ],
+    "class_names": [
+      "low",
+      "high"
+    ],
+    "positive_class": "high"
+  },
+  "inference": {
+    "score_fn": "sigmoid",
+    "sigmoid_a": 1.0,
+    "sigmoid_b": 0.0
+  },
+  "quantization": {
+    "enabled": false,
+    "dtype": "float32"
+  },
+  "training_data_tag": "demo_stub",
+  "created_utc": "2025-10-23T00:00:00Z",
+  "checksum": {
+    "algo": "sha256",
+    "value": ""
+  },
+  "license": "Apache-2.0",
+  "notes": "Demo model; replace with trained weights."
+}

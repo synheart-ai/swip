@@ -39,7 +39,8 @@ coverage/
 
 # Dependency directories
 node_modules/
-jspm_packages/
+**/jspm_packages/
+# Note: packages/ directories are intentionally tracked for swip_core
 
 # Optional npm cache directory
 .npm
@@ -143,7 +144,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python-specific lib directories (not Flutter lib/)
+# lib/
 lib64/
 parts/
 sdist/
@@ -264,3 +266,4 @@ _site/
 *.backup
 *.old
 *.orig
+CLAUDE.md

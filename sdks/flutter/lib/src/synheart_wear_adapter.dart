@@ -1,33 +1,52 @@
+import 'dart:async';
+import 'dart:math';
 import 'models.dart';
 import 'errors.dart';
-import 'package:synheart_wear/synheart_wear.dart' as wear;
 
+/// Mock biometric data for testing and demo purposes
+class MockBiometricData {
+  final DateTime timestamp;
+  final double? heartRate;
+  final double? rmssd;
+  final double? sdnn;
+  final double? pnn50;
+  final double? lf;
+  final double? hf;
+  final double? lfHfRatio;
+  final double? qualityScore;
+
+  MockBiometricData({
+    required this.timestamp,
+    this.heartRate,
+    this.rmssd,
+    this.sdnn,
+    this.pnn50,
+    this.lf,
+    this.hf,
+    this.lfHfRatio,
+    this.qualityScore,
+  });
+}
+
+/// Adapter for wearable device integration
+/// Currently uses mock data for demo purposes
 class SynheartWearAdapter {
-  late wear.WearableManager _wearableManager;
   bool _initialized = false;
   String? _activeSessionId;
-  List<wear.BiometricData> _sessionData = [];
+  final List<MockBiometricData> _sessionData = [];
+  Timer? _mockDataTimer;
+  final Random _random = Random();
+
+  // Configuration for simulated data
+  bool _useMockData = true;
 
   Future<void> initialize() async {
     try {
-      _wearableManager = wear.WearableManager();
-      await _wearableManager.initialize();
-      
-      // Request permissions for HRV data
-      final permissions = await _wearableManager.requestPermissions([
-        wear.PermissionType.heartRate,
-        wear.PermissionType.heartRateVariability,
-        wear.PermissionType.motion,
-      ]);
-      
-      if (!permissions[wear.PermissionType.heartRate]! || 
-          !permissions[wear.PermissionType.heartRateVariability]!) {
-        throw PermissionDeniedError('HRV permissions not granted');
-      }
-      
+      // In production, this would initialize the actual wearable connection
+      // For now, we use simulated data
       _initialized = true;
     } catch (e) {
-      throw SWIPError('E_INIT_FAILED', 'Failed to initialize synheart_wear: $e');
+      throw SWIPError('E_INIT_FAILED', 'Failed to initialize adapter: $e');
     }
   }
 
@@ -37,22 +56,13 @@ class SynheartWearAdapter {
     }
 
     try {
-      // Start biometric data collection
-      await _wearableManager.startCollection(
-        dataTypes: [
-          wear.DataType.heartRate,
-          wear.DataType.heartRateVariability,
-          wear.DataType.rrIntervals,
-        ],
-        samplingRate: wear.SamplingRate.standard, // ~1Hz for HRV
-      );
-
-      // Set up data stream listener
-      _wearableManager.dataStream.listen(_onBiometricData);
-      
       _activeSessionId = DateTime.now().millisecondsSinceEpoch.toString();
       _sessionData.clear();
-      
+
+      if (_useMockData) {
+        _startMockDataGeneration();
+      }
+
       return _activeSessionId!;
     } catch (e) {
       throw SWIPError('E_COLLECTION_START_FAILED', 'Failed to start collection: $e');
@@ -65,11 +75,12 @@ class SynheartWearAdapter {
     }
 
     try {
-      // Get recent HRV data from synheart_wear
-      final recentData = await _wearableManager.getRecentData(
-        dataType: wear.DataType.heartRateVariability,
-        duration: const Duration(minutes: 5),
-      );
+      // Get recent HRV data
+      final recentData = _sessionData.where((data) {
+        return data.timestamp.isAfter(
+          DateTime.now().subtract(const Duration(minutes: 5)),
+        );
+      }).toList();
 
       return recentData.map((data) => _convertBiometricToHRV(data)).toList();
     } catch (e) {
@@ -84,42 +95,63 @@ class SynheartWearAdapter {
 
     try {
       // Stop data collection
-      await _wearableManager.stopCollection();
-      
+      _mockDataTimer?.cancel();
+      _mockDataTimer = null;
+
       // Calculate wellness metrics using SWIP-1.0 reference math
       final results = _calculateWellnessImpact(_sessionData);
-      
+
       _activeSessionId = null;
       _sessionData.clear();
-      
+
       return results;
     } catch (e) {
       throw SWIPError('E_EVALUATION_FAILED', 'Failed to evaluate session: $e');
     }
   }
 
-  void _onBiometricData(wear.BiometricData data) {
-    if (_activeSessionId != null) {
-      _sessionData.add(data);
-    }
+  void _startMockDataGeneration() {
+    // Generate mock biometric data every second
+    _mockDataTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_activeSessionId != null) {
+        _sessionData.add(_generateMockBiometricData());
+      }
+    });
   }
 
-  HRVMeasurement _convertBiometricToHRV(wear.BiometricData data) {
-    // Convert synheart_wear normalized data to SWIP HRV format
+  MockBiometricData _generateMockBiometricData() {
+    // Generate realistic mock HRV data
+    final baseHR = 70.0 + _random.nextDouble() * 20.0; // 70-90 BPM
+    final baseRMSSD = 25.0 + _random.nextDouble() * 30.0; // 25-55 ms
+    final baseSDNN = 35.0 + _random.nextDouble() * 25.0; // 35-60 ms
+
+    return MockBiometricData(
+      timestamp: DateTime.now(),
+      heartRate: baseHR,
+      rmssd: baseRMSSD,
+      sdnn: baseSDNN,
+      pnn50: 15.0 + _random.nextDouble() * 35.0,
+      lf: 500.0 + _random.nextDouble() * 500.0,
+      hf: 300.0 + _random.nextDouble() * 400.0,
+      lfHfRatio: 0.8 + _random.nextDouble() * 1.4,
+      qualityScore: 0.7 + _random.nextDouble() * 0.3,
+    );
+  }
+
+  HRVMeasurement _convertBiometricToHRV(MockBiometricData data) {
     return HRVMeasurement(
-      rmssd: data.hrvMetrics?.rmssd ?? 0.0,
-      sdnn: data.hrvMetrics?.sdnn ?? 0.0,
-      pnn50: data.hrvMetrics?.pnn50 ?? 0.0,
-      lf: data.hrvMetrics?.lowFrequency,
-      hf: data.hrvMetrics?.highFrequency,
-      lfHfRatio: data.hrvMetrics?.lowHighRatio,
+      rmssd: data.rmssd ?? 0.0,
+      sdnn: data.sdnn ?? 0.0,
+      pnn50: data.pnn50 ?? 0.0,
+      lf: data.lf,
+      hf: data.hf,
+      lfHfRatio: data.lfHfRatio,
       timestamp: data.timestamp,
       quality: _assessDataQuality(data),
     );
   }
 
-  String _assessDataQuality(wear.BiometricData data) {
-    // Assess data quality based on synheart_wear quality indicators
+  String _assessDataQuality(MockBiometricData data) {
     if (data.qualityScore != null) {
       if (data.qualityScore! >= 0.9) return 'excellent';
       if (data.qualityScore! >= 0.7) return 'good';
@@ -128,7 +160,7 @@ class SynheartWearAdapter {
     return 'poor';
   }
 
-  SWIPSessionResults _calculateWellnessImpact(List<wear.BiometricData> sessionData) {
+  SWIPSessionResults _calculateWellnessImpact(List<MockBiometricData> sessionData) {
     if (sessionData.isEmpty) {
       return SWIPSessionResults(
         sessionId: _activeSessionId!,
@@ -143,7 +175,6 @@ class SynheartWearAdapter {
 
     // Extract HRV measurements
     final hrvMeasurements = sessionData
-        .where((data) => data.hrvMetrics != null)
         .map(_convertBiometricToHRV)
         .toList();
 
@@ -191,7 +222,7 @@ class SynheartWearAdapter {
     return SWIPSessionResults(
       sessionId: _activeSessionId!,
       duration: Duration(
-        milliseconds: sessionData.last.timestamp.millisecondsSinceEpoch - 
+        milliseconds: sessionData.last.timestamp.millisecondsSinceEpoch -
                      sessionData.first.timestamp.millisecondsSinceEpoch,
       ),
       wellnessScore: wellnessScore.clamp(-1.0, 1.0),
@@ -238,6 +269,9 @@ class SynheartWearAdapter {
     // Recovery rate is how close the final RMSSD is to baseline
     return (lastRMSSD / baselineRMSSD).clamp(0.0, 1.0);
   }
+
+  void dispose() {
+    _mockDataTimer?.cancel();
+    _mockDataTimer = null;
+  }
 }
-
-
