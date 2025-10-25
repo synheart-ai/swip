@@ -69,7 +69,9 @@ class FeatureExtractor {
       return null; // Insufficient data in window
     }
 
-    return _computeHRVFeatures(windowData, windowHR, now);
+    final features = _computeHRVFeatures(windowData, windowHR, now);
+    
+    return features;
   }
 
   /// Compute HRV features from RR intervals and heart rate data
@@ -79,6 +81,9 @@ class FeatureExtractor {
     final hrStd = _standardDeviation(heartRates);
     final hrMin = heartRates.reduce(min);
     final hrMax = heartRates.reduce(max);
+
+    // RR interval statistics
+    final meanRR = _mean(rrIntervals);
 
     // HRV metrics
     final sdnn = _computeSDNN(rrIntervals);
@@ -101,6 +106,7 @@ class FeatureExtractor {
       lf: lf,
       hf: hf,
       lfHfRatio: lfHfRatio,
+      meanRR: meanRR,
       timestamp: timestamp,
     );
   }

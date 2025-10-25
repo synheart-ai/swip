@@ -171,19 +171,51 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
 
   void _startHeartRateSimulation() {
     // Simulate realistic heart rate data for emotion recognition demo
+    // Based on the ExtraTrees model's expected feature ranges
+    final random = Random(DateTime.now().millisecondsSinceEpoch); // Properly seeded random
+    
     _simulationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final random = Random();
+      // Simulate different emotional states with varied heart rate patterns
+      // ExtraTrees model expects: SDNN, RMSSD, pNN50, Mean_RR, HR_mean
+      final emotionalState = random.nextInt(3); // 0=calm, 1=stressed, 2=amused
       
-      // Simulate different emotional states with varying heart rate patterns
-      final baseHr = 70.0 + random.nextDouble() * 20.0; // 70-90 BPM base
-      final variation = random.nextDouble() * 10.0 - 5.0; // ±5 BPM variation
-      final heartRate = baseHr + variation;
+      double baseHr;
+      double hrVariability; // Affects SDNN and RMSSD
+      double rrVariability; // Affects pNN50
+      
+      switch (emotionalState) {
+        case 0: // Calm - lower HR, high HRV (high SDNN/RMSSD)
+          baseHr = 65.0 + random.nextDouble() * 10.0; // 65-75 BPM
+          hrVariability = 8.0 + random.nextDouble() * 4.0; // Higher variability
+          rrVariability = 1.5; // More RR interval changes > 50ms
+          break;
+        case 1: // Stressed - higher HR, low HRV (low SDNN/RMSSD)
+          baseHr = 85.0 + random.nextDouble() * 20.0; // 85-105 BPM
+          hrVariability = 2.0 + random.nextDouble() * 3.0; // Lower variability
+          rrVariability = 0.5; // Fewer RR interval changes > 50ms
+          break;
+        case 2: // Amused - moderate HR, moderate HRV
+          baseHr = 75.0 + random.nextDouble() * 15.0; // 75-90 BPM
+          hrVariability = 5.0 + random.nextDouble() * 5.0; // Moderate variability
+          rrVariability = 1.0; // Moderate RR interval changes
+          break;
+        default:
+          baseHr = 70.0;
+          hrVariability = 5.0;
+          rrVariability = 1.0;
+      }
+      
+      // Add random variation to create realistic HRV patterns
+      final variation = (random.nextDouble() - 0.5) * hrVariability * 2;
+      final heartRate = (baseHr + variation).clamp(50.0, 120.0); // Keep within realistic bounds
+      
+      // Calculate RR interval with added variability for pNN50
+      final baseRR = 60000.0 / heartRate; // Convert BPM to ms
+      final rrVariation = (random.nextDouble() - 0.5) * 100.0 * rrVariability;
+      final rrInterval = (baseRR + rrVariation).clamp(500.0, 1200.0);
       
       // Add heart rate data to emotion recognition
       _swipManager.addHeartRateData(heartRate, DateTime.now());
-      
-      // Also add RR interval data
-      final rrInterval = 60000.0 / heartRate; // Convert BPM to ms
       _swipManager.addRRIntervalData(rrInterval, DateTime.now());
     });
   }
@@ -192,45 +224,107 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SWIP Flutter Example'),
+        title: const Text('SWIP Emotion Recognition'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Status',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(_status),
-                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Icon(
-                          _isInitialized ? Icons.check_circle : Icons.error,
-                          color: _isInitialized ? Colors.green : Colors.red,
+                          Icons.info_outline_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
                         ),
                         const SizedBox(width: 8),
-                        Text(_isInitialized ? 'Initialized' : 'Not Initialized'),
+                        Text(
+                          'Status',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.circle,
+                            size: 8,
+                            color: _isInitialized ? Colors.green : Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _status,
+                              style: const TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          _isInitialized ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                          color: _isInitialized ? Colors.green : Colors.grey,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isInitialized ? 'System Ready' : 'Not Initialized',
+                          style: TextStyle(
+                            color: _isInitialized ? Colors.green[700] : Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     ),
                     if (_isSessionActive) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.play_circle, color: Colors.green),
-                          const SizedBox(width: 8),
-                          Text('Session Active: $_activeSessionId'),
-                        ],
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.play_circle_rounded, color: Colors.green[700], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Session Active',
+                                style: TextStyle(
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -239,42 +333,68 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
             ),
             const SizedBox(height: 16),
             Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Session Controls',
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.control_camera_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Session Controls',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton(
+                          child: ElevatedButton.icon(
                             onPressed: _isInitialized && !_isSessionActive
                                 ? _startSession
                                 : null,
-                            child: const Text('Start Session'),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Start Session'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: ElevatedButton(
+                          child: ElevatedButton.icon(
                             onPressed: _isSessionActive ? _endSession : null,
-                            child: const Text('End Session'),
+                            icon: const Icon(Icons.stop_rounded),
+                            label: const Text('End Session'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isInitialized ? _getCurrentMetrics : null,
-                        child: const Text('Get Current Metrics'),
-                      ),
                     ),
                   ],
                 ),
@@ -284,77 +404,213 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
             if (_swipManager.isEmotionRecognitionAvailable) ...[
               const SizedBox(height: 16),
               Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Real-time Emotion Recognition',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      if (_currentEmotion != null) ...[
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        _currentEmotion != null 
+                          ? _getEmotionColor(_currentEmotion!.emotion).withOpacity(0.1)
+                          : Colors.blue.withOpacity(0.05),
+                        Colors.white,
+                      ],
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Row(
                           children: [
                             Icon(
-                              _getEmotionIcon(_currentEmotion!.emotion),
-                              size: 32,
-                              color: _getEmotionColor(_currentEmotion!.emotion),
+                              Icons.psychology_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 28,
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _currentEmotion!.emotion.label,
-                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                      color: _getEmotionColor(_currentEmotion!.emotion),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Confidence: ${(_currentEmotion!.confidence * 100).toStringAsFixed(1)}%',
-                                    style: Theme.of(context).textTheme.bodyMedium,
-                                  ),
-                                ],
+                            const SizedBox(width: 12),
+                            Text(
+                              'Real-time Emotion Recognition',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        // Probability bars
-                        ...List.generate(_currentEmotion!.probabilities.length, (index) {
-                          final emotion = EmotionClass.values[index];
-                          final probability = _currentEmotion!.probabilities[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2.0),
-                            child: Row(
+                        const SizedBox(height: 24),
+                        if (_currentEmotion != null) ...[
+                          Center(
+                            child: Column(
                               children: [
-                                SizedBox(
-                                  width: 80,
-                                  child: Text(emotion.label),
+                                Container(
+                                  padding: const EdgeInsets.all(32),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _getEmotionColor(_currentEmotion!.emotion).withOpacity(0.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _getEmotionColor(_currentEmotion!.emotion).withOpacity(0.3),
+                                        blurRadius: 20,
+                                        spreadRadius: 5,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    _getEmotionIcon(_currentEmotion!.emotion),
+                                    size: 80,
+                                    color: _getEmotionColor(_currentEmotion!.emotion),
+                                  ),
                                 ),
-                                Expanded(
-                                  child: LinearProgressIndicator(
-                                    value: probability,
-                                    backgroundColor: Colors.grey[300],
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      _getEmotionColor(emotion),
+                                const SizedBox(height: 24),
+                                Text(
+                                  _currentEmotion!.emotion.label,
+                                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                                    color: _getEmotionColor(_currentEmotion!.emotion),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 36,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: _getEmotionColor(_currentEmotion!.emotion).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${(_currentEmotion!.confidence * 100).toStringAsFixed(1)}% Confidence',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      color: _getEmotionColor(_currentEmotion!.emotion),
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Text('${(probability * 100).toStringAsFixed(1)}%'),
                               ],
                             ),
-                          );
-                        }),
-                      ] else ...[
-                        const Text('No emotion data yet. Start a session to see real-time emotion recognition.'),
+                          ),
+                          const SizedBox(height: 32),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Emotion Probabilities',
+                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ...List.generate(_currentEmotion!.probabilities.length, (index) {
+                                  // Get the actual emotion class name from the model's class list
+                                  final modelClasses = _swipManager.emotionController.emotionClasses;
+                                  
+                                  // Only show emotions that are in the model's class list
+                                  if (index >= modelClasses.length) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  
+                                  final emotionLabel = modelClasses[index];
+                                  final emotion = EmotionClass.fromString(emotionLabel);
+                                  final probability = _currentEmotion!.probabilities[index];
+                                  
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  _getEmotionIcon(emotion),
+                                                  size: 20,
+                                                  color: _getEmotionColor(emotion),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  emotionLabel,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w500,
+                                                    color: Colors.grey[800],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            Text(
+                                              '${(probability * 100).toStringAsFixed(1)}%',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: _getEmotionColor(emotion),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: LinearProgressIndicator(
+                                            value: probability,
+                                            minHeight: 8,
+                                            backgroundColor: Colors.grey[300],
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              _getEmotionColor(emotion),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.sentiment_neutral_rounded,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No emotion data yet',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Start a session to see real-time emotion recognition',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey[500]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -415,29 +671,6 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'About SWIP',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'The Synheart Wellness Impact Protocol (SWIP) measures the physiological impact of digital experiences using heart-rate variability (HRV) data from wearable devices.',
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'This example demonstrates basic SWIP integration with Flutter. In a real app, you would connect to actual wearable devices via synheart_wear.',
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -446,22 +679,34 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
 
   IconData _getEmotionIcon(EmotionClass emotion) {
     switch (emotion) {
-      case EmotionClass.amused:
-        return Icons.sentiment_very_satisfied;
       case EmotionClass.calm:
-        return Icons.sentiment_neutral;
+        return Icons.spa_rounded;
       case EmotionClass.stressed:
+        return Icons.warning_rounded;
+      case EmotionClass.amused:
+        return Icons.sentiment_very_satisfied_rounded;
+      case EmotionClass.amusement:
+        return Icons.sentiment_very_satisfied;
+      case EmotionClass.baseline:
+        return Icons.sentiment_neutral;
+      case EmotionClass.stress:
         return Icons.sentiment_very_dissatisfied;
     }
   }
 
   Color _getEmotionColor(EmotionClass emotion) {
     switch (emotion) {
-      case EmotionClass.amused:
-        return Colors.green;
       case EmotionClass.calm:
-        return Colors.blue;
+        return Colors.green;
       case EmotionClass.stressed:
+        return Colors.red;
+      case EmotionClass.amused:
+        return Colors.amber;
+      case EmotionClass.amusement:
+        return Colors.amber;
+      case EmotionClass.baseline:
+        return Colors.blue;
+      case EmotionClass.stress:
         return Colors.red;
     }
   }

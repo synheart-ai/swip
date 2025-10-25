@@ -28,6 +28,9 @@ dependencies:
   # Logging
   logger: ^2.0.2+1
   
+  # ONNX Runtime for ML inference
+  flutter_onnxruntime: ^1.5.2
+  
   # Hardware connectivity via Synheart Wear (optional - will use mock if not available)
   # synheart_wear: ^0.1.0
 

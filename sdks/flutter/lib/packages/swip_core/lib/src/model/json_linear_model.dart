@@ -62,7 +62,7 @@ class JsonLinearModel implements OnDeviceModel {
   }
 
   @override
-  double predict(List<double> x) {
+  Future<double> predict(List<double> x) async {
     // z-score normalize
     final xn = List<double>.generate(x.length, (i) {
       final mu = i < _mean.length ? _mean[i] : 0.0;

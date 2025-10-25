@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/services.dart';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import '../models.dart';
 
 /// Unified emotion recognition model following RFC specifications
@@ -21,6 +22,11 @@ class EmotionRecognitionModel {
   final String? exportTimeUtc;
   final String? trainingCommit;
   final String? dataManifestId;
+  
+  // ONNX-specific fields
+  OrtSession? _onnxSession;
+  Map<String, dynamic>? _metadata;
+  bool _isOnnxModel = false;
 
   EmotionRecognitionModel({
     required this.type,
@@ -53,8 +59,8 @@ class EmotionRecognitionModel {
       scalerStd: List<double>.from(scaler['std'] as List),
       weights: (json['weights'] as List).map((w) => List<double>.from(w as List)).toList(),
       bias: List<double>.from(json['bias'] as List),
-      inference: json['inference'] as Map<String, dynamic>? ?? {},
-      training: json['training'] as Map<String, dynamic>? ?? {},
+      inference: Map<String, dynamic>.from(json['inference'] as Map? ?? {}),
+      training: Map<String, dynamic>.from(json['training'] as Map? ?? {}),
       modelHash: json['model_hash'] as String?,
       exportTimeUtc: json['export_time_utc'] as String?,
       trainingCommit: json['training_commit'] as String?,
@@ -62,19 +68,191 @@ class EmotionRecognitionModel {
     );
   }
 
-  /// Load model from Flutter asset
+  /// Load model from Flutter asset (supports both JSON and ONNX)
   static Future<EmotionRecognitionModel> loadFromAsset(String assetPath) async {
     try {
-      final jsonString = await rootBundle.loadString(assetPath);
-      final jsonData = json.decode(jsonString) as Map<String, dynamic>;
-      return EmotionRecognitionModel.fromJson(jsonData);
+      if (assetPath.endsWith('.onnx')) {
+        return await _loadOnnxModel(assetPath);
+      } else {
+        final jsonString = await rootBundle.loadString(assetPath);
+        final jsonData = json.decode(jsonString) as Map<String, dynamic>;
+        return EmotionRecognitionModel.fromJson(jsonData);
+      }
     } catch (e) {
       throw Exception('Failed to load emotion recognition model: $e');
     }
   }
 
+  /// Load ONNX model with metadata
+  static Future<EmotionRecognitionModel> _loadOnnxModel(String onnxPath) async {
+    try {
+      // Load metadata
+      final metaPath = onnxPath.replaceAll('.onnx', '.meta.json');
+      final jsonString = await rootBundle.loadString(metaPath);
+      final metadata = json.decode(jsonString) as Map<String, dynamic>;
+      
+      // Try to initialize ONNX Runtime
+      try {
+        final ort = OnnxRuntime();
+        final session = await ort.createSessionFromAsset(onnxPath);
+        
+        // Create model instance with ONNX data
+        final model = EmotionRecognitionModel(
+          type: metadata['format'] as String,
+          version: '1.0', // Default version for ONNX models
+          modelId: metadata['model_id'] as String,
+          featureOrder: List<String>.from(metadata['schema']['input_names'] as List),
+          classes: List<String>.from(metadata['output']['class_names'] as List),
+          scalerMean: [], // ONNX models have built-in normalization
+          scalerStd: [],
+          weights: [], // Not applicable for ONNX
+          bias: [],
+          inference: metadata['output'] as Map<String, dynamic>,
+          training: {
+            'dataset': metadata['training_data_tag'] as String? ?? 'unknown',
+            'created_utc': metadata['created_utc'] as String?,
+          },
+          modelHash: metadata['checksum']?['value'] as String?,
+          exportTimeUtc: metadata['created_utc'] as String?,
+          trainingCommit: null,
+          dataManifestId: metadata['training_data_tag'] as String?,
+        );
+        
+        // Set ONNX-specific fields
+        model._onnxSession = session;
+        model._metadata = metadata;
+        model._isOnnxModel = true;
+        
+        return model;
+      } catch (onnxError) {
+        // ONNX failed (likely on web platform), fallback to JSON model
+        print('ONNX runtime failed: $onnxError');
+        print('Falling back to JSON model...');
+        
+        // Try to load the corresponding JSON model
+        final jsonPath = onnxPath.replaceAll('.onnx', '.json');
+        return await loadFromAsset(jsonPath);
+      }
+    } catch (e) {
+      throw Exception('Failed to load ONNX model: $e');
+    }
+  }
+
   /// Predict emotion from HRV features
-  EmotionPrediction predict(HRVFeatures features) {
+  Future<EmotionPrediction> predict(HRVFeatures features) async {
+    if (_isOnnxModel) {
+      return await _predictOnnx(features);
+    } else {
+      return _predictJson(features);
+    }
+  }
+
+  /// Predict using ONNX model
+  Future<EmotionPrediction> _predictOnnx(HRVFeatures features) async {
+    if (_onnxSession == null) {
+      throw Exception('ONNX session not initialized');
+    }
+
+    try {
+      // Extract all features based on model's feature order
+      final featureVector = _extractFeatureVector(features);
+      
+      // Prepare input tensor
+      // Sklearn ExtraTrees models use "X" as input name by default
+      // Try common input names in order of likelihood
+      final inputShape = [1, featureVector.length]; // Batch size 1, N features
+      final inputTensor = await OrtValue.fromList(featureVector, inputShape);
+      
+      // Try different possible input names
+      Map<String, OrtValue>? outputs;
+      final possibleInputNames = ['X', 'float_input', 'input', 'inputs', featureOrder.first];
+      
+      for (final inputName in possibleInputNames) {
+        try {
+          final inputs = <String, OrtValue>{inputName: inputTensor};
+          outputs = await _onnxSession!.run(inputs);
+          break; // Success, exit loop
+        } catch (e) {
+          if (inputName == possibleInputNames.last) {
+            // Last attempt failed, rethrow
+            throw Exception('Could not find valid input name. Tried: ${possibleInputNames.join(", ")}. Error: $e');
+          }
+          // Try next name
+          continue;
+        }
+      }
+      
+      if (outputs == null) {
+        throw Exception('Failed to run ONNX inference');
+      }
+      
+      // ExtraTrees ONNX models output: [label, probabilities]
+      // probabilities is shape (1, 3) for 3 classes
+      List<double> probabilities;
+      
+      if (outputs.length >= 2) {
+        // Model has both label and probabilities outputs
+        // Use second output for probabilities (like Python: outputs[1])
+        final probsKey = outputs.keys.toList()[1]; // Second output is probabilities
+        final probsValue = outputs[probsKey]!;
+        final probsData = await probsValue.asList();
+        
+        // Handle the shape (1, 3) - first dimension is batch, second is classes
+        if (probsData is List && probsData.isNotEmpty) {
+          if (probsData[0] is List) {
+            // Nested list [[p1, p2, p3]] - extract inner list
+            final innerList = probsData[0] as List;
+            probabilities = innerList.map((e) => (e as num).toDouble()).toList();
+          } else {
+            // Flat list [p1, p2, p3] - use directly
+            probabilities = probsData.map((e) => (e as num).toDouble()).toList();
+          }
+        } else {
+          throw Exception('Unexpected probabilities structure: empty or invalid');
+        }
+      } else {
+        // Fallback: use first output and apply softmax
+        final outputKey = outputs.keys.first;
+        final outputValue = outputs[outputKey]!;
+        final outputData = await outputValue.asList();
+        
+        List<double> logits;
+        if (outputData is List && outputData.isNotEmpty) {
+          if (outputData[0] is List) {
+            // Nested list
+            final innerList = outputData[0] as List;
+            logits = innerList.map((e) => (e as num).toDouble()).toList();
+          } else {
+            // Flat list
+            logits = outputData.map((e) => (e as num).toDouble()).toList();
+          }
+        } else {
+          throw Exception('Unexpected output structure: empty or invalid');
+        }
+        
+        probabilities = _softmax(logits, 1.0);
+      }
+      
+      // Find predicted class
+      final predictedIndex = probabilities.indexOf(probabilities.reduce(max));
+      final predictedClass = EmotionClass.fromString(classes[predictedIndex]);
+      
+      // Calculate confidence as max probability
+      final confidence = probabilities.reduce(max);
+
+      return EmotionPrediction(
+        emotion: predictedClass,
+        probabilities: probabilities,
+        confidence: confidence,
+        timestamp: features.timestamp,
+      );
+    } catch (e) {
+      throw Exception('ONNX inference failed: $e');
+    }
+  }
+
+  /// Predict using JSON model
+  EmotionPrediction _predictJson(HRVFeatures features) {
     // Convert features to vector in correct order
     final featureVector = _extractFeatureVector(features);
     
@@ -87,8 +265,8 @@ class EmotionRecognitionModel {
     // Convert scores to probabilities
     final probabilities = _computeProbabilities(scores);
     
-    // Find predicted class
-    final predictedIndex = scores.indexOf(scores.reduce(max));
+    // Find predicted class (use probabilities, not raw scores)
+    final predictedIndex = probabilities.indexOf(probabilities.reduce(max));
     final predictedClass = EmotionClass.fromString(classes[predictedIndex]);
     
     // Calculate confidence as max probability
@@ -111,9 +289,23 @@ class EmotionRecognitionModel {
       'hr_max': features.hrMax,
       'sdnn': features.sdnn,
       'rmssd': features.rmssd,
+      'pnn50': features.pnn50 ?? 0.0,
+      'mean_rr': features.meanRR ?? 0.0,
+      // Add uppercase variants for case-insensitive matching
+      'SDNN': features.sdnn,
+      'RMSSD': features.rmssd,
+      'pNN50': features.pnn50 ?? 0.0,
+      'Mean_RR': features.meanRR ?? 0.0,
+      'HR_mean': features.meanHr,
+      'HR_MEAN': features.meanHr,
+      'HR_STD': features.hrStd,
+      'HR_MIN': features.hrMin,
+      'HR_MAX': features.hrMax,
     };
 
-    return featureOrder.map((name) => featureMap[name] ?? 0.0).toList();
+    final featureVector = featureOrder.map((name) => featureMap[name] ?? 0.0).toList();
+    
+    return featureVector;
   }
 
   /// Normalize features using z-score normalization
@@ -202,25 +394,41 @@ class EmotionRecognitionModel {
 
   /// Validate model integrity
   bool validateModel() {
-    // Check basic structure
-    if (featureOrder.length != scalerMean.length || 
-        featureOrder.length != scalerStd.length) {
-      return false;
-    }
-    
-    if (weights.length != classes.length || 
-        bias.length != classes.length) {
-      return false;
-    }
-    
-    // Check weights dimensions
-    for (final weightVector in weights) {
-      if (weightVector.length != featureOrder.length) {
+    if (_isOnnxModel) {
+      // For ONNX models, check that session is loaded and metadata is valid
+      return _onnxSession != null && 
+             _metadata != null && 
+             classes.isNotEmpty && 
+             featureOrder.isNotEmpty;
+    } else {
+      // Check basic structure for JSON models
+      if (featureOrder.length != scalerMean.length || 
+          featureOrder.length != scalerStd.length) {
         return false;
       }
+      
+      if (weights.length != classes.length || 
+          bias.length != classes.length) {
+        return false;
+      }
+      
+      // Check weights dimensions
+      for (final weightVector in weights) {
+        if (weightVector.length != featureOrder.length) {
+          return false;
+        }
+      }
+      
+      return true;
     }
-    
-    return true;
+  }
+
+  /// Dispose of model resources
+  Future<void> dispose() async {
+    if (_isOnnxModel && _onnxSession != null) {
+      // ONNX sessions are automatically disposed when they go out of scope
+      _onnxSession = null;
+    }
   }
 
   /// Get model performance metrics
