@@ -16,7 +16,7 @@ dependencies:
   json_annotation: ^4.8.1
   
   # Health and sensors
-  health: ^10.0.0
+  health: ^13.2.1
   sensors_plus: ^4.0.2
   
   # Permissions
@@ -27,12 +27,19 @@ dependencies:
   
   # Logging
   logger: ^2.0.2+1
+
+  # ONNX Runtime for ML inference (optional, to be added later)
+  # flutter_onnxruntime: ^1.192.0
+
+  # Synheart packages
+  synheart_wear:
+    path: ../../../synheart-wear/packages/synheart_wear
+  synheart_emotion:
+    path: ../../../synheart-emotion
   
-  # ONNX Runtime for ML inference
-  flutter_onnxruntime: ^1.5.2
-  
-  # Hardware connectivity via Synheart Wear (optional - will use mock if not available)
-  # synheart_wear: ^0.1.0
+  # SWIP Core
+  swip_core:
+    path: lib/packages/swip_core
 
 dev_dependencies:
   flutter_test:

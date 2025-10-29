@@ -1,318 +1,394 @@
 # SWIP Flutter SDK
 
-Flutter implementation of the Synheart Wellness Impact Protocol with integrated emotion recognition capabilities.
+Synheart Wellness Impact Protocol - Flutter SDK for measuring how apps affect user well-being in real-time.
 
 ## Overview
 
-The SWIP Flutter SDK provides comprehensive wellness impact measurement and real-time emotion recognition using heart rate variability (HRV) data from wearable devices. The SDK includes:
+The SWIP SDK enables apps to understand how users feel during digital interactions — privately, locally, and in real time. It combines:
 
-- **Wellness Impact Measurement** - Quantify the physiological effects of digital experiences
-- **Real-time Emotion Recognition** - Classify emotional states using WESAD-trained models
-- **Multi-device Support** - Works with Apple Watch, Fitbit, Garmin, and other wearables
-- **Privacy-focused** - All processing happens on-device
+1. **synheart_wear** – Reads heart rate (HR), heart rate variability (HRV), and motion from wearables
+2. **synheart-emotion** – Runs lightweight on-device models that infer emotional states
+3. **swip-core** – Fuses biosignal features and emotion probabilities into a single SWIP Score (0–100)
 
-## Install
+## Installation
 
-Add to pubspec.yaml:
+Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
   swip:
-    path: ./sdks/flutter
+    path: ../../../swip/sdks/flutter
+  
+  # SWIP dependencies
+  synheart_wear:
+    path: ../../../synheart-wear/packages/synheart_wear
+  synheart_emotion:
+    path: ../../../synheart-emotion
 ```
 
-Or use as a package when published.
-
 ## Quick Start
-
-### Basic Wellness Measurement
 
 ```dart
 import 'package:swip/swip.dart';
 
-final swip = SWIPManager();
-await swip.initialize();
-
-final sessionId = await swip.startSession(
-  config: SWIPSessionConfig(
-    duration: Duration(minutes: 30),
-    type: 'baseline',
-    platform: 'flutter',
-    environment: 'indoor',
+// Initialize the SDK
+final sdk = SwipSdkManager(
+  config: SwipSdkConfig(
+    enableLogging: true,
   ),
 );
 
-final metrics = await swip.getCurrentMetrics();
-final results = await swip.endSession();
-print('Wellness Impact Score: ${results.wellnessScore}');
-```
+await sdk.initialize();
 
-### Emotion Recognition
-
-```dart
-// Initialize with emotion recognition
-final swipManager = SWIPManager();
-await swipManager.initialize();
-
-// Start session with emotion recognition
-final sessionId = await swipManager.startSession(config: sessionConfig);
-
-// Listen to real-time emotion predictions
-swipManager.emotionStream.listen((prediction) {
-  print('Emotion: ${prediction.emotion.label}');
-  print('Confidence: ${prediction.confidence}');
-  print('Probabilities: ${prediction.probabilities}');
+// Listen to SWIP scores
+sdk.scoreStream.listen((result) {
+  print('SWIP Score: ${result.swipScore}');
+  print('Emotion: ${result.dominantEmotion}');
+  print('Confidence: ${result.confidence}');
 });
 
-// Add heart rate data (from wearable device)
-swipManager.addHeartRateData(75.0, DateTime.now());
+// Start a session when your app goes to foreground
+final sessionId = await sdk.startSession(
+  appId: 'com.example.myapp',
+);
 
-// Add RR interval data (from wearable device)  
-swipManager.addRRIntervalData(800.0, DateTime.now());
+// ... your app logic ...
 
-// End session
-final results = await swipManager.endSession();
+// Stop the session when app goes to background
+final results = await sdk.stopSession();
+print('Average SWIP Score: ${results.getSummary()['average_swip_score']}');
+
+// Dispose when done
+sdk.dispose();
 ```
 
-## Features
+## Components
 
-### Wellness Impact Measurement
+### SwipSdkManager
 
-- **HRV Analysis** - RMSSD, SDNN, PNN50, frequency domain metrics
-- **Wellness Impact Score** - Quantified physiological impact (0-100)
-- **Session Tracking** - Monitor changes over time
-- **Multi-platform Support** - Works across different wearable devices
+Main entry point for the SDK that orchestrates all components.
 
-### Emotion Recognition
+```dart
+final sdk = SwipSdkManager(
+  config: SwipSdkConfig(
+    swipConfig: SwipConfig(
+      smoothingLambda: 0.9,  // Exponential smoothing factor
+      enableSmoothing: true,
+      enableArtifactDetection: true,
+    ),
+    emotionConfig: EmotionConfig.defaultConfig,
+    enableLogging: true,
+  ),
+);
+```
 
-- **Real-time Classification** - Amused, Calm, Stressed emotional states
-- **WESAD-trained Models** - 78% accuracy on academic dataset
-- **On-device Processing** - Complete privacy, no cloud dependencies
-- **Configurable Parameters** - Adjustable window sizes and inference frequency
+### SwipScoreResult
 
-### Emotion Classes
-- **Amused** - Positive emotional state with elevated HRV
-- **Calm** - Neutral baseline emotional state  
-- **Stressed** - Negative emotional state with reduced HRV
+Contains the computed SWIP score and metadata:
 
-### HRV Metrics Computed
-1. **Mean Heart Rate** - Average BPM over window
-2. **Heart Rate Standard Deviation** - Variability measure
-3. **Heart Rate Min/Max** - Range indicators
-4. **SDNN** - Standard deviation of NN intervals
-5. **RMSSD** - Root mean square of successive differences
-6. **PNN50** - Percentage of intervals differing by >50ms
+```dart
+class SwipScoreResult {
+  final double swipScore;              // 0-100 score
+  final double physSubscore;           // Physiological contribution
+  final double emoSubscore;            // Emotion contribution
+  final double confidence;             // Confidence level
+  final String dominantEmotion;        // Top emotion
+  final Map<String, double> emotionProbabilities;  // All emotions
+  final DateTime timestamp;
+  final String modelId;
+  final Map<String, double> reasons;   // Explainable factors
+  final bool artifactFlag;
+}
+```
+
+### Score Interpretation
+
+| Score Range | State | Meaning |
+|-------------|-------|---------|
+| 80-100 | Positive | Relaxed / Engaged - app supports wellness |
+| 60-79 | Neutral | Emotionally stable |
+| 40-59 | Mild Stress | Cognitive or emotional fatigue |
+| <40 | Negative | Stress / emotional load detected |
 
 ## Architecture
 
-### Wellness Measurement
 ```
-Wearable Data → SynheartWearAdapter → SWIPManager → Wellness Results
-```
-
-### Emotion Recognition
-```
-Wearable Data → FeatureExtractor → EmotionRecognitionModel → EmotionRecognitionController → UI
-```
-
-### Components
-
-| Component | Description | File |
-|-----------|-------------|------|
-| `SWIPManager` | Main SDK interface with integrated emotion recognition | `lib/src/manager.dart` |
-| `SynheartWearAdapter` | Hardware connectivity via synheart_wear | `lib/src/synheart_wear_adapter.dart` |
-| `EmotionRecognitionModel` | Unified model loader and predictor | `lib/src/ml/emotion_recognition_model.dart` |
-| `EmotionRecognitionController` | Real-time emotion detection pipeline | `lib/src/ml/emotion_recognition_controller.dart` |
-| `FeatureExtractor` | Computes HRV features from sensor data | `lib/src/ml/feature_extractor.dart` |
-
-## Model Specifications
-
-### Emotion Recognition Model
-- **Type**: Linear SVM (One-vs-Rest, 3 classes)
-- **Features**: 6-dimensional HRV feature vector
-- **Window Size**: 60 seconds (configurable)
-- **Inference Interval**: 10 seconds (configurable)
-- **Model Size**: < 1 MB JSON file
-- **Training Dataset**: WESAD (Wearable Stress and Affect Detection)
-- **Performance**: 78% accuracy, 76% balanced accuracy, 75% F1 score
-
-## Hardware Connectivity
-
-SWIP uses `synheart_wear` for unified device connectivity across multiple platforms:
-
-- **Apple Watch** - Native HealthKit integration
-- **Fitbit** - API-based data collection
-- **Garmin** - Connect IQ and API support
-- **Samsung Watch** - Samsung Health integration
-- **BLE Heart Rate Monitors** - Generic Bluetooth Low Energy support
-
-## Performance Targets
-
-| Metric | Target | Current |
-|--------|--------|---------|
-| Model Size | < 1 MB | ~50 KB |
-| Inference Time | < 10 ms | ~5 ms |
-| Memory Footprint | < 5 MB | ~2 MB |
-| Battery Impact | < 2% per hour | ~1% per hour |
-| Accuracy | ≥ 75% | 78% (WESAD) |
-
-## Privacy & Security
-
-- **Local Processing**: All wellness and emotion analysis runs on-device
-- **No Data Transmission**: HRV data never leaves the device
-- **Open Model Weights**: Model parameters are transparent and auditable
-- **User Control**: Users can opt-in for anonymized research data
-- **Model Integrity**: SHA-256 hash verification for model authenticity
-
-## Testing
-
-Run the comprehensive test suite:
-
-```bash
-# Run all tests
-flutter test
-
-# Run emotion recognition tests specifically
-flutter test test/emotion_recognition_test.dart
-
-# Run ML component tests
-flutter test test/ml_components_test.dart
+┌─────────────────────┐
+│   Your App          │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  SwipSdkManager     │ ← Orchestrates everything
+└──────────┬──────────┘
+           │
+    ┌──────┴──────┬────────────┐
+    ▼             ▼            ▼
+┌──────────┐ ┌───────────┐ ┌──────────┐
+│synheart_ │ │synheart_  │ │swip_core │
+│wear      │ │emotion    │ │          │
+└────┬─────┘ └────┬──────┘ └────┬─────┘
+     │            │             │
+     ▼            ▼             ▼
+  HR/HRV      Emotion       SWIP Score
+  Motion      Probabilities (0-100)
 ```
 
-Run the example app to see both wellness measurement and emotion recognition in action:
+## Data Flow
 
-```bash
-cd example
-flutter run
-```
+1. **Wearable Sensor** → `synheart_wear` reads HR, HRV, motion data
+2. **Feature Extraction** → Sliding window aggregates data (~1 Hz)
+3. **Emotion Inference** → `synheart-emotion` computes emotion probabilities
+4. **SWIP Computation** → `swip-core` fuses physiological and emotion data
+5. **Stream Output** → Your app receives SWIP scores and emotion updates
 
-## Advanced Usage
+## Privacy & Consent
 
-### Custom Emotion Recognition Configuration
+SWIP follows a **privacy-first design** with three consent levels:
+
+### Consent Levels
+
+| Level | Name | Description |
+|-------|------|-------------|
+| 0 | `onDevice` | **Default** - All processing local, no network calls, raw biosignals never leave device |
+| 1 | `localExport` | User can manually export data, no automatic uploads |
+| 2 | `dashboardShare` | Aggregated metrics can be uploaded (no raw biosignals) |
+
+### Privacy Guarantees
+
+- **Local-first**: All computation defaults to on-device processing
+- **No Raw Data Transmission**: Raw HR/RR intervals never uploaded automatically
+- **Explicit Consent Required**: Network operations gated by consent level
+- **Data Purge API**: Complete data deletion with `purgeAllData()`
+- **30-Day Retention**: Raw biosignals auto-deleted after 30 days
+- **Encryption**: Sensitive data encrypted via device Keychain/Keystore
+- **Anonymization**: Hashed device IDs, per-session UUIDs
+- **TLS 1.3**: Required for any cloud transmission
+
+### Usage Example
 
 ```dart
-// Custom emotion recognition controller with different parameters
-final emotionController = EmotionRecognitionController(
-  inferenceInterval: Duration(seconds: 5),  // More frequent updates
-  featureWindowSize: Duration(seconds: 90), // Longer analysis window
-  modelAssetPath: 'assets/ml/custom_model.json', // Custom model
+import 'package:swip/swip.dart';
+
+// Initialize consent manager
+final consentManager = ConsentManager();
+
+// Request dashboard sharing (shows UI to user)
+final approved = await consentManager.requestConsent(
+  requested: ConsentLevel.dashboardShare,
+  context: ConsentContext(appId: 'com.example.app'),
 );
 
-final swipManager = SWIPManager(
-  emotionController: emotionController,
-);
+if (approved) {
+  await consentManager.grantConsent(ConsentLevel.dashboardShare);
+
+  // Now network operations are allowed
+  await sdk.uploadDailyAggregate();
+}
+
+// Check consent before sensitive operations
+if (consentManager.canPerformAction(ConsentLevel.dashboardShare)) {
+  // Upload aggregates
+}
+
+// Purge all user data (GDPR compliance)
+await consentManager.purgeAllData();
 ```
 
-### Direct Model Access
+### Data Storage
+
+Local SQLite database with schema:
+- `sessions` - Session tracking
+- `scores` - SWIP scores
+- `samples_raw` - Raw biosignals (30-day retention)
+- `daily_agg` - Daily aggregates
+- `monthly_agg` - Monthly summaries
+- `consent_history` - Audit trail
+
+See `SwipStorageSchema` for complete schema.
+
+## SWIP Core Implementation
+
+The `swip-core` package implements the RFC specification:
+
+### Physiological Subscore
+
+```
+S_phys = w_HR * S_HR + w_HRV * S_HRV + w_M * S_M
+
+where:
+- w_HR = 0.45 (heart rate weight)
+- w_HRV = 0.35 (heart rate variability weight)
+- w_M = 0.20 (motion weight)
+```
+
+### Emotion Subscore
+
+```
+S_emo = Σ(p_i * u_i)
+
+where emotion utilities are:
+- Amused: 0.95
+- Calm: 0.85
+- Focused: 0.80
+- Neutral: 0.70
+- Stressed: 0.15
+```
+
+### Fusion Formula
+
+```
+SWIP = β * S_emo + (1-β) * S_phys
+where β = min(0.6, C)
+
+Finally: SWIP_100 = 100 * SWIP
+```
+
+## Session Lifecycle
+
+1. **App Opened / Foreground** → Start reading biosignals
+2. **During Session** → Continuous emotion inference and SWIP score updates (~1 Hz)
+3. **App Minimized / Background** → Stop sampling, save session summary
+4. **App Closed** → Finalize session, write daily aggregates
+
+## Example Usage
 
 ```dart
-// Load emotion recognition model directly
-final model = await EmotionRecognitionModel.loadFromAsset('assets/ml/wesad_emotion_v1_0.json');
+import 'package:swip/swip.dart';
 
-// Get model information
-final modelInfo = model.getModelInfo();
-print('Model: ${modelInfo['modelId']} v${modelInfo['version']}');
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
 
-// Get performance metrics
-final metrics = model.getPerformanceMetrics();
-print('Accuracy: ${metrics['accuracy']}');
-```
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late SwipSdkManager _sdk;
+  String? _currentSessionId;
+  double? _currentScore;
 
-## Model Files
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initSdk();
+  }
 
-### Emotion Recognition Model
+  Future<void> _initSdk() async {
+    _sdk = SwipSdkManager(
+      config: SwipSdkConfig(enableLogging: true),
+    );
+    
+    await _sdk.initialize();
+    
+    // Listen to score updates
+    _sdk.scoreStream.listen((result) {
+      setState(() {
+        _currentScore = result.swipScore;
+      });
+      
+      if (result.swipScore < 40) {
+        // Alert user about stress
+        _showStressAlert();
+      }
+    });
+  }
 
-The emotion recognition model uses a unified JSON format:
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startSession();
+    } else if (state == AppLifecycleState.paused) {
+      _stopSession();
+    }
+  }
 
-```json
-{
-  "type": "linear_svm_ovr",
-  "version": "1.0",
-  "model_id": "wesad_emotion_v1_0",
-  "feature_order": ["hr_mean", "hr_std", "hr_min", "hr_max", "sdnn", "rmssd"],
-  "classes": ["Amused", "Calm", "Stressed"],
-  "scaler": {
-    "mean": [72.5, 8.2, 65.0, 85.0, 45.3, 32.1],
-    "std": [12.0, 5.5, 8.0, 15.0, 18.7, 12.4]
-  },
-  "weights": [
-    [0.12, -0.33, 0.08, -0.19, 0.5, 0.3],
-    [-0.21, 0.55, -0.07, 0.1, -0.4, -0.3],
-    [0.02, -0.12, 0.1, 0.05, 0.2, 0.1]
-  ],
-  "bias": [-0.2, 0.3, 0.1],
-  "training": {
-    "dataset": "WESAD",
-    "accuracy": 0.78,
-    "balanced_accuracy": 0.76,
-    "f1_score": 0.75
+  Future<void> _startSession() async {
+    if (_currentSessionId != null) return;
+    
+    _currentSessionId = await _sdk.startSession(
+      appId: 'com.example.myapp',
+    );
+  }
+
+  Future<void> _stopSession() async {
+    if (_currentSessionId == null) return;
+    
+    final results = await _sdk.stopSession();
+    print('Session summary: ${results.getSummary()}');
+    _currentSessionId = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Current SWIP Score: ${_currentScore?.toStringAsFixed(1) ?? 'N/A'}'),
+            _currentScore != null
+                ? _buildScoreIndicator(_currentScore!)
+                : CircularProgressIndicator(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScoreIndicator(double score) {
+    Color color;
+    if (score >= 80) color = Colors.green;
+    else if (score >= 60) color = Colors.yellow;
+    else if (score >= 40) color = Colors.orange;
+    else color = Colors.red;
+    
+    return Container(
+      width: 200,
+      height: 200,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.3),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          score.toStringAsFixed(0),
+          style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  void _showStressAlert() {
+    // Show user-friendly stress alert
+  }
+
+  @override
+  void dispose() {
+    _sdk.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 }
 ```
 
-### Model Loading
+## Requirements
 
-Models are loaded from Flutter assets:
-
-```yaml
-# pubspec.yaml
-flutter:
-  assets:
-    - assets/ml/
-```
-
-Place your model JSON files in `assets/ml/` directory.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Model Not Loading**: Ensure model JSON file is in `assets/ml/` directory
-2. **No Emotion Predictions**: Check that heart rate data is being added regularly
-3. **Low Confidence**: Ensure sufficient data in analysis window (60+ seconds)
-4. **Performance Issues**: Reduce inference frequency or window size
-
-### Debug Mode
-
-Enable debug logging to troubleshoot issues:
-
-```dart
-// Enable debug output
-swipManager.emotionStream.listen((prediction) {
-  print('DEBUG: Emotion prediction: $prediction');
-});
-
-// Get model information
-final modelInfo = swipManager.emotionController.getModelInfo();
-print('Model: ${modelInfo['modelId']} v${modelInfo['version']}');
-
-// Get performance metrics
-final metrics = swipManager.emotionController.getPerformanceMetrics();
-print('Accuracy: ${metrics['accuracy']}');
-```
-
-## Future Enhancements
-
-1. **Model Training Pipeline**: Automated WESAD dataset processing and model training
-2. **Adaptive Baselines**: Personalized emotion recognition based on individual HRV patterns
-3. **Federated Learning**: Aggregate performance metrics without sharing raw data
-4. **Model Distillation**: Compress SVM to lightweight neural network
-5. **Multimodal Fusion**: Combine HRV with motion, GSR, and cognitive performance data
-6. **Real-time Calibration**: On-device model adaptation based on user feedback
-
-## References
-
-- **WESAD Dataset**: Wearable Stress and Affect Detection
-- **Li & Washington (2023)**: Personalized vs Generalized Emotion Recognition
-- **SWIP-1.0 Specification**: Synheart Wellness Impact Protocol
-- **RFC Documents**: On-device SVM implementation specifications
+- Flutter SDK >=3.0.0
+- iOS 13+ or Android API 24+
+- Compatible wearable device (Apple Watch, Fitbit, Garmin, etc.)
+- Health permissions granted
 
 ## License
 
-Apache-2.0  
-© 2025 Synheart AI — open source & community-driven.
+Apache-2.0
 
----
+## Documentation
 
-**Author**: Israel Goytom  
-**Organization**: Synheart Open Council (SOC)
+- [SWIP Core RFC](../../docs/rfc/rfc-swip-core.md)
+- [SWIP SDK RFC](../../docs/rfc/)
+- [Synheart Wear SDK](https://github.com/synheart-ai/synheart-wear)
+- [Synheart Emotion](https://github.com/synheart-ai/synheart-emotion)
+
+## Author
+
+Israel Goytom - Synheart AI
