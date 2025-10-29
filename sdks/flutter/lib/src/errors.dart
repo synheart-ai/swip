@@ -28,4 +28,32 @@ class DataQualityError extends SWIPError {
       : super('E_SIGNAL_LOW_QUALITY', msg);
 }
 
+class InitializationError extends SWIPError {
+  InitializationError([String msg = 'Failed to initialize SDK'])
+      : super('E_INITIALIZATION_FAILED', msg);
+}
 
+class SessionError extends SWIPError {
+  SessionError([String msg = 'Session error'])
+      : super('E_SESSION_ERROR', msg);
+}
+
+class SensorError extends SWIPError {
+  SensorError([String msg = 'Sensor error'])
+      : super('E_SENSOR_ERROR', msg);
+}
+
+class ModelError extends SWIPError {
+  ModelError([String msg = 'ML model error'])
+      : super('E_MODEL_ERROR', msg);
+}
+
+class ConsentError extends SWIPError {
+  ConsentError([String msg = 'Consent required'])
+      : super('E_CONSENT_REQUIRED', msg);
+}
+
+class StorageError extends SWIPError {
+  StorageError([String msg = 'Storage operation failed'])
+      : super('E_STORAGE_ERROR', msg);
+}
