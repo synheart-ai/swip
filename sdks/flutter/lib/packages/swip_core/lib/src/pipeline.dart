@@ -47,11 +47,11 @@ class SWIPManager {
     await _wear.requestPermissions();
     await _wear.start();
 
-    _sub = _wear.watch().listen((s) {
+    _sub = _wear.watch().listen((s) async {
       final w = _win!.push(s.ts, s, (x) => x.ts);
       if (w == null) return;
       final feats = _feature.toFeatures(w).values;
-      final p = _model.predict(feats);
+      final p = await _model.predict(feats);
       final score =
           SwipScorer.fromProbability(p: p, features: feats, info: _model.info);
       _scoresCtrl.add(score);

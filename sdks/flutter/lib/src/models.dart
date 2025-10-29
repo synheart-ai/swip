@@ -78,9 +78,12 @@ class SWIPSessionResults {
 
 // Emotion Recognition Models
 enum EmotionClass {
-  amused('Amused'),
+  baseline('Baseline'),
   calm('Calm'),
-  stressed('Stressed');
+  stress('Stress'),
+  stressed('Stressed'),
+  amusement('Amusement'),
+  amused('Amused');
 
   const EmotionClass(this.label);
   final String label;
@@ -88,7 +91,7 @@ enum EmotionClass {
   static EmotionClass fromString(String label) {
     return EmotionClass.values.firstWhere(
       (e) => e.label.toLowerCase() == label.toLowerCase(),
-      orElse: () => EmotionClass.calm,
+      orElse: () => EmotionClass.baseline,
     );
   }
 }
@@ -125,6 +128,7 @@ class HRVFeatures {
   final double? lf;
   final double? hf;
   final double? lfHfRatio;
+  final double? meanRR; // Mean RR interval in ms
   final DateTime timestamp;
 
   HRVFeatures({
@@ -138,6 +142,7 @@ class HRVFeatures {
     this.lf,
     this.hf,
     this.lfHfRatio,
+    this.meanRR,
     required this.timestamp,
   });
 
@@ -164,6 +169,7 @@ class HRVFeatures {
     'lf': lf,
     'hf': hf,
     'lfHfRatio': lfHfRatio,
+    'meanRR': meanRR,
     'timestamp': timestamp.toIso8601String(),
   };
 }

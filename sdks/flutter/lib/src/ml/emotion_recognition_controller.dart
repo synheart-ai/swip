@@ -29,7 +29,7 @@ class EmotionRecognitionController {
         ),
         inferenceInterval = inferenceInterval ?? const Duration(seconds: 10),
         featureWindowSize = featureWindowSize ?? const Duration(seconds: 60),
-        modelAssetPath = modelAssetPath ?? 'assets/ml/wesad_emotion_v1_0.json';
+        modelAssetPath = modelAssetPath ?? 'assets/ml/extratrees_wrist_all_v1_0.onnx';
 
   /// Stream of emotion predictions
   Stream<EmotionPrediction> get emotionStream {
@@ -85,7 +85,7 @@ class EmotionRecognitionController {
   }
 
   /// Perform emotion inference on current feature window
-  void _performEmotionInference() {
+  Future<void> _performEmotionInference() async {
     try {
       if (_model == null) return;
       
@@ -98,7 +98,7 @@ class EmotionRecognitionController {
       }
 
       // Predict emotion using the loaded model
-      final prediction = _model!.predict(features);
+      final prediction = await _model!.predict(features);
       
       // Emit prediction
       _emotionController?.add(prediction);
