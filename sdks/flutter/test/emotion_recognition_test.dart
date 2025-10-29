@@ -40,7 +40,7 @@ void main() {
       expect(model.validateModel(), isTrue);
     });
 
-    test('EmotionRecognitionModel should normalize features correctly', () {
+    test('EmotionRecognitionModel should normalize features correctly', () async {
       final jsonData = {
         'type': 'linear_svm_ovr',
         'version': '1.0',
@@ -73,7 +73,7 @@ void main() {
         timestamp: DateTime.now(),
       );
       
-      final prediction = model.predict(features);
+      final prediction = await model.predict(features);
       expect(prediction.emotion, isA<EmotionClass>());
       expect(prediction.confidence, greaterThanOrEqualTo(0.0));
       expect(prediction.confidence, lessThanOrEqualTo(1.0));
@@ -99,7 +99,7 @@ void main() {
       expect(EmotionClass.fromString('Amused'), equals(EmotionClass.amused));
       expect(EmotionClass.fromString('calm'), equals(EmotionClass.calm));
       expect(EmotionClass.fromString('STRESSED'), equals(EmotionClass.stressed));
-      expect(EmotionClass.fromString('unknown'), equals(EmotionClass.calm)); // default
+      expect(EmotionClass.fromString('unknown'), equals(EmotionClass.baseline)); // default
     });
 
     test('EmotionPrediction should serialize correctly', () {
@@ -145,6 +145,7 @@ void main() {
       expect(features!.meanHr, greaterThan(0));
       expect(features.sdnn, greaterThan(0));
       expect(features.rmssd, greaterThan(0));
+      expect(features.meanRR, greaterThan(0)); // Verify meanRR is computed
     });
 
     test('HRVFeatures should convert to feature vector correctly', () {

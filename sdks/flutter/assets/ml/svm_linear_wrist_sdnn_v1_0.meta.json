@@ -1,0 +1,48 @@
+{
+  "model_id": "svm_linear_wrist_sdnn_v1_0",
+  "format": "onnx",
+  "schema": {
+    "input_names": [
+      "SDNN"
+    ],
+    "input_units": [
+      "ms"
+    ],
+    "order_fixed": true,
+    "normalization": {
+      "type": "none",
+      "mean": [
+        346.5433217198369
+      ],
+      "std": [
+        446.02671436865324
+      ],
+      "note": "Normalization included in the binary model pipeline"
+    }
+  },
+  "output": {
+    "type": "probability",
+    "range": [
+      0.0,
+      1.0
+    ],
+    "class_names": [
+      "Baseline",
+      "Stress",
+      "Amusement"
+    ],
+    "positive_class": "Stress"
+  },
+  "quantization": {
+    "enabled": false,
+    "dtype": "float32"
+  },
+  "training_data_tag": "wesad_r1_3class",
+  "created_utc": "2025-10-23T07:14:02Z",
+  "license": "Apache-2.0",
+  "notes": "ONNX model includes built-in normalization. Converted from sklearn LinearSVC trained on WESAD wrist_sdnn",
+  "checksum": {
+    "algo": "sha256",
+    "value": "bdbccf5a9b29825d8e6f4cbdcf6079031b2c162b7f70ecd3e1672fa334a8a6d4"
+  }
+}

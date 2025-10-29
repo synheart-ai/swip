@@ -1,0 +1,36 @@
+{
+  "type": "linear_svm_ovr",
+  "version": "1.0",
+  "model_id": "svm_linear_wrist_sdnn_v1_0",
+  "format": "svm_json",
+  "feature_order": ["SDNN"],
+  "classes": ["Amused", "Calm", "Stressed"],
+  "scaler": {
+    "mean": [120.0],
+    "std": [30.0]
+  },
+  "weights": [
+    [-0.4],
+    [0.0],
+    [0.8]
+  ],
+  "bias": [0.2, 0.0, -0.5],
+  "inference": {
+    "score_fn": "softmax",
+    "temperature": 1.0
+  },
+  "training": {
+    "dataset": "wesad_r1_3class",
+    "subjects": 15,
+    "windows": 1200,
+    "accuracy": 0.75,
+    "balanced_accuracy": 0.73,
+    "f1_score": 0.72
+  },
+  "model_hash": "bdbccf5a9b29825d8e6f4cbdcf6079031b2c162b7f70ecd3e1672fa334a8a6d4",
+  "export_time_utc": "2025-10-23T07:14:02Z",
+  "training_commit": "abc123def456",
+  "data_manifest_id": "wesad_r1_3class",
+  "license": "Apache-2.0",
+  "notes": "JSON fallback model for ONNX svm_linear_wrist_sdnn_v1_0 - trained on WESAD wrist_sdnn data"
+}

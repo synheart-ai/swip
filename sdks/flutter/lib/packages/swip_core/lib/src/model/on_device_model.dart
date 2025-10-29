@@ -12,6 +12,6 @@ class ModelInfo {
 abstract class OnDeviceModel {
   ModelInfo get info;
   /// features must follow info.inputSchema. Returns probability in [0,1].
-  double predict(List<double> features);
+  Future<double> predict(List<double> features);
   Future<void> dispose() async {}
 }
