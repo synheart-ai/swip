@@ -1,0 +1,6 @@
+framework module flutter_onnxruntime {
+  umbrella header "flutter_onnxruntime-umbrella.h"
+
+  export *
+  module * { export * }
+}
