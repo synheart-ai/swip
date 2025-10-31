@@ -42,6 +42,12 @@
 @import sensors_plus;
 #endif
 
+#if __has_include(<synheart_wear/SynheartWearPlugin.h>)
+#import <synheart_wear/SynheartWearPlugin.h>
+#else
+@import synheart_wear;
+#endif
+
 @implementation GeneratedPluginRegistrant
 
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry {
@@ -51,6 +57,7 @@
   [PathProviderPlugin registerWithRegistrar:[registry registrarForPlugin:@"PathProviderPlugin"]];
   [PermissionHandlerPlugin registerWithRegistrar:[registry registrarForPlugin:@"PermissionHandlerPlugin"]];
   [FPPSensorsPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPSensorsPlusPlugin"]];
+  [SynheartWearPlugin registerWithRegistrar:[registry registrarForPlugin:@"SynheartWearPlugin"]];
 }
 
 @end
