@@ -1,6 +1,7 @@
 name: swip
 description: Synheart Wellness Impact Protocol - Flutter SDK
 version: 1.0.0+1
+publish_to: none
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -16,7 +17,7 @@ dependencies:
   json_annotation: ^4.8.1
   
   # Health and sensors
-  health: ^10.0.0
+  health: ^13.2.1
   sensors_plus: ^4.0.2
   
   # Permissions
@@ -31,8 +32,13 @@ dependencies:
   # ONNX Runtime for ML inference
   flutter_onnxruntime: ^1.5.2
   
-  # Hardware connectivity via Synheart Wear (optional - will use mock if not available)
-  # synheart_wear: ^0.1.0
+  # Hardware connectivity via Synheart Wear
+  synheart_wear: ^0.1.2
+
+  # Emotion engine (Git)
+  synheart_emotion:
+    git:
+      url: https://github.com/synheart-ai/synheart-emotion.git
 
 dev_dependencies:
   flutter_test:

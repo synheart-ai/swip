@@ -10,7 +10,7 @@ dependencies:
   synheart_wear:
     git:
       url: https://github.com/synheart-ai/synheart_wear.git
-      path: sdks/flutter/packages/synheart_wear
+      path: packages/synheart_wear
 
 flutter:
   assets:
