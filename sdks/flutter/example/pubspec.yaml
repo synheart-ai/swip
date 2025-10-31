@@ -9,6 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  sqflite: ^2.3.0
+  path_provider: ^2.1.2
+  uuid: ^4.4.0
+  share_plus: ^7.2.2
+  package_info_plus: ^8.0.0
+  device_info_plus: ^12.2.0
+  battery_plus: ^5.0.0
   
   # SWIP SDK (local dependency)
   swip:
