@@ -8,6 +8,7 @@ class SWIPManager {
   final SynheartWearAdapter wear;
   emo.EmotionEngine? _emotionEngine;
   final _emotionCtrl = StreamController<EmotionPrediction>.broadcast();
+  final _diagnosticsCtrl = StreamController<Map<String, Object?>>.broadcast();
   Timer? _emotionTimer;
   StreamSubscription<({double? hr, List<double>? rrMs, DateTime ts})>?
       _emotionInputSub;
@@ -89,11 +90,41 @@ class SWIPManager {
             ' dur_ms=' +
             (stats['duration_ms'] as int).toString());
       }
+      final t0 = DateTime.now();
       final results =
           await _emotionEngine?.consumeReady() ?? const <emo.EmotionResult>[];
+      final latencyMs = DateTime.now().difference(t0).inMilliseconds;
       for (final r in results) {
         final pred = _mapEmotionResult(r);
         _emotionCtrl.add(pred);
+
+        // Calculate hr_mean from buffer stats (average of hr_range) or from features
+        double? hrMean;
+        if (stats != null && stats['hr_range'] != null) {
+          final hrRange = stats['hr_range'] as List<dynamic>;
+          if (hrRange.length >= 2) {
+            hrMean = ((hrRange[0] as num) + (hrRange[1] as num)) / 2.0;
+          }
+        }
+        // Prefer hr_mean from features if available (more accurate)
+        if (r.features.containsKey('hr_mean')) {
+          hrMean = r.features['hr_mean'];
+        }
+
+        _diagnosticsCtrl.add({
+          'ts': DateTime.now().toUtc().toIso8601String(),
+          'latency_ms': latencyMs,
+          'buffer': stats ?? {},
+          'hr_mean': hrMean, // Add calculated hr_mean
+          'model': {
+            'id': r.model['id'],
+            'type': r.model['type'],
+            'labels': r.model['labels'],
+          },
+          'probabilities': r.probabilities,
+          'emotion': r.emotion,
+          'confidence': r.confidence,
+        });
         _onEmotionUpdate(pred);
       }
       if (results.isEmpty) {
@@ -127,6 +158,11 @@ class SWIPManager {
 
   /// Get stream of real-time emotion predictions
   Stream<EmotionPrediction> get emotionStream => _emotionCtrl.stream;
+  Stream<Map<String, Object?>> get diagnosticsStream => _diagnosticsCtrl.stream;
+
+  /// Get stream of biosignal data from wearable adapter for logging
+  /// Returns a stream of WearMetrics suitable for dim_App_biosignals table
+  Stream<dynamic> get biosignalStream => wear.getBiosignalStreamForLogging();
 
   /// Get current emotion state (best-effort: last emitted)
   EmotionPrediction? _lastEmotion;
@@ -168,6 +204,7 @@ class SWIPManager {
     _emotionTimer?.cancel();
     _emotionInputSub?.cancel();
     _emotionCtrl.close();
+    _diagnosticsCtrl.close();
   }
 
   EmotionPrediction _mapEmotionResult(emo.EmotionResult r) {

@@ -1,6 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:swip/swip.dart';
+import 'package:synheart_wear/synheart_wear.dart' as wearpkg;
+import 'package:share_plus/share_plus.dart';
+import 'logging_db.dart';
+import 'system_metrics.dart';
 
 void main() {
   runApp(const SWIPExampleApp());
@@ -33,6 +39,7 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
   final SWIPManager _swipManager = SWIPManager();
   bool _isInitialized = false;
   bool _isSessionActive = false;
+  bool _loggingEnabled = true;
   String? _activeSessionId;
   SWIPSessionResults? _lastResults;
   String _status = 'Not initialized';
@@ -40,7 +47,7 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
   // Emotion recognition
   EmotionPrediction? _currentEmotion;
   StreamSubscription<EmotionPrediction>? _emotionSubscription;
-  Timer? _simulationTimer;
+  StreamSubscription? _biosignalSubscription;
 
   // Model information
   Map<String, dynamic>? _modelInfo;
@@ -55,7 +62,7 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
   @override
   void dispose() {
     _emotionSubscription?.cancel();
-    _simulationTimer?.cancel();
+    _biosignalSubscription?.cancel();
     _swipManager.dispose();
     super.dispose();
   }
@@ -66,6 +73,8 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
         _status = 'Initializing...';
       });
 
+      await LoggingDb.init();
+      await SystemMetrics.init(); // Initialize system metrics
       await _swipManager.initialize();
 
       // Set up emotion recognition stream
@@ -73,6 +82,38 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
         setState(() {
           _currentEmotion = prediction;
         });
+      });
+
+      // Diagnostics stream -> DB
+      _swipManager.diagnosticsStream.listen((diag) async {
+        if (!_loggingEnabled) return;
+        final probs = (diag['probabilities'] as Map)
+            .map((k, v) => MapEntry(k.toString(), (v as num).toDouble()));
+        final latencyMs = (diag['latency_ms'] as int?) ?? 0;
+
+        // Get system metrics
+        final systemMetrics = await SystemMetrics.getAllMetrics(
+          inferenceLatencyMs: latencyMs,
+        );
+
+        await LoggingDb.insertEmotionLog(
+          tsUtc: diag['ts'] as String,
+          latencyMs: latencyMs,
+          buffer: (diag['buffer'] as Map<String, Object?>?) ?? const {},
+          probabilities: probs,
+          topEmotion: (diag['emotion'] as String?) ?? 'unknown',
+          confidence: (diag['confidence'] as num?)?.toDouble() ?? 0.0,
+          model: (diag['model'] as Map<String, Object?>?),
+          hrMean: (diag['hr_mean'] as num?)?.toDouble(),
+          memoryHeapMb: (systemMetrics['memory_heap_mb'] as num?)?.toDouble(),
+          cpuPercent: (systemMetrics['cpu_percent'] as num?)?.toDouble(),
+          energyEstimateUj:
+              (systemMetrics['energy_estimate_uj'] as num?)?.toDouble(),
+          batteryLevel: (systemMetrics['battery_level'] as num?)?.toDouble(),
+          isCharging: systemMetrics['is_charging'] as bool?,
+          appVersion: systemMetrics['app_version'] as String?,
+          deviceIdHash: systemMetrics['device_id_hash'] as String?,
+        );
       });
 
       // Model information (synheart_emotion external engine) not available via SWIP now
@@ -109,6 +150,61 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
 
       // Using real wearable data via synheart_wear → synheart_emotion
 
+      // Subscribe to biosignal stream for dim_App_biosignals logging
+      _biosignalSubscription?.cancel();
+      _biosignalSubscription =
+          _swipManager.biosignalStream.listen((data) async {
+        if (!_loggingEnabled || _activeSessionId == null) return;
+        if (data is! wearpkg.WearMetrics) return;
+
+        final m = data;
+        final hr = m.getMetric(wearpkg.MetricType.hr)?.toDouble();
+        var hrvSdnn = m.getMetric(wearpkg.MetricType.hrvSdnn)?.toDouble();
+        final rrMs = m.rrMs;
+
+        // Calculate SDNN from RR intervals if not provided by the stream
+        // SDNN = standard deviation of all RR intervals
+        if (hrvSdnn == null && rrMs != null && rrMs.isNotEmpty) {
+          if (rrMs.length >= 2) {
+            // Calculate mean
+            final mean = rrMs.reduce((a, b) => a + b) / rrMs.length;
+            // Calculate variance
+            final variance = rrMs
+                    .map((r) => (r - mean) * (r - mean))
+                    .reduce((a, b) => a + b) /
+                rrMs.length;
+            // SDNN = sqrt(variance) = standard deviation
+            hrvSdnn = variance > 0 ? sqrt(variance) : null;
+          } else if (rrMs.length == 1) {
+            // Single RR interval: SDNN = 0 (no variability)
+            hrvSdnn = 0.0;
+          }
+        }
+
+        // Debug log if still null
+        if (hrvSdnn == null) {
+          // ignore: avoid_print
+          print(
+              '[SWIP][DB] hrv_sdnn calculation failed: hr=$hr, rrMs length=${rrMs?.length ?? 0}');
+        }
+
+        // IBI (Inter-Beat Interval) = mean of RR intervals, or single RR estimate
+        final ibi = rrMs != null && rrMs.isNotEmpty
+            ? rrMs.reduce((a, b) => a + b) / rrMs.length
+            : (hr != null && hr > 0 ? 60000.0 / hr : null);
+
+        await LoggingDb.insertBiosignal(
+          appSessionId: _activeSessionId!,
+          timestamp: m.timestamp,
+          heartRate: hr,
+          hrvSdnn: hrvSdnn,
+          ibi: ibi,
+          // Other fields not yet available from synheart_wear:
+          // respiratoryRate, accelerometer, temperature, bloodOxygenSaturation,
+          // ecg, emg, eda, gyro, ppg - will remain null
+        );
+      });
+
       setState(() {
         _isSessionActive = true;
         _status = 'Session active: $_activeSessionId';
@@ -128,9 +224,9 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
         _status = 'Ending session...';
       });
 
-      // Stop heart rate simulation
-      _simulationTimer?.cancel();
-      _simulationTimer = null;
+      // Stop biosignal logging subscription
+      await _biosignalSubscription?.cancel();
+      _biosignalSubscription = null;
 
       final results = await _swipManager.endSession();
 
@@ -147,9 +243,123 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
     }
   }
 
-  // Removed unused metrics read helper
+  Future<void> _exportDatabase() async {
+    try {
+      setState(() {
+        _status = 'Exporting database...';
+      });
 
-  // Removed HR simulation; using real wearable data
+      // Show format selection dialog
+      final format = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Export Format'),
+          content: const Text('Choose export format:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'json'),
+              child: const Text('JSON'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'csv'),
+              child: const Text('CSV'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+
+      if (format == null) {
+        setState(() {
+          _status = 'Export cancelled';
+        });
+        return;
+      }
+
+      // Export based on format
+      String? filePath;
+      if (format == 'json') {
+        filePath = await LoggingDb.exportToJson();
+      } else if (format == 'csv') {
+        filePath = await LoggingDb.exportToCsv();
+      }
+
+      if (filePath == null) {
+        setState(() {
+          _status = 'Export failed: No data to export';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Export failed: No data to export'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Get stats to show in share dialog
+      final stats = await LoggingDb.getStats();
+      final statsMessage = '''
+Exported ${format.toUpperCase()} file:
+- Emotion logs: ${stats['emotion_inference_log']?['count'] ?? 0} records
+- Biosignals: ${stats['dim_App_biosignals']?['count'] ?? 0} records
+
+File saved to: ${filePath.split('/').last}
+''';
+
+      // Share the file using share_plus
+      final file = File(filePath);
+      if (await file.exists()) {
+        final xFile = XFile(filePath);
+        await Share.shareXFiles(
+          [xFile],
+          text: statsMessage,
+          subject: 'SWIP Diagnostics Export',
+        );
+        setState(() {
+          _status = 'Export completed';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Database exported successfully as $format'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _status = 'Export failed: File not found';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Export failed: File not found'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _status = 'Export failed: $e';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -335,6 +545,33 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Log diagnostics to SQLite'),
+                        Switch(
+                          value: _loggingEnabled,
+                          onChanged: (v) {
+                            setState(() => _loggingEnabled = v);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _exportDatabase,
+                      icon: const Icon(Icons.download_rounded),
+                      label: const Text('Export Database'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -744,6 +981,22 @@ class _SWIPExampleHomePageState extends State<SWIPExampleHomePage> {
                             style: const TextStyle(color: Colors.black54),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Export button
+                      ElevatedButton.icon(
+                        onPressed: _exportDatabase,
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('Export Session Data'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       ClipRRect(

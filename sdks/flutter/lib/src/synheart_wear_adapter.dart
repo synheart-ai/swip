@@ -3,7 +3,6 @@ import 'models.dart';
 import 'errors.dart';
 import 'package:synheart_wear/synheart_wear.dart' as wearpkg;
 
-/// Mock biometric data for testing and demo purposes
 /// Adapter for wearable device integration backed by synheart_wear SDK
 class SynheartWearAdapter {
   bool _initialized = false;
@@ -12,8 +11,6 @@ class SynheartWearAdapter {
   wearpkg.SynheartWear? _wear;
   StreamSubscription<wearpkg.WearMetrics>? _hrvSubscription;
   Stream<wearpkg.WearMetrics>? _hrStream;
-  // Temporary injection for testing emotion pipeline without device RR
-  final bool _injectTestRr = false;
 
   Future<void> initialize() async {
     try {
@@ -65,9 +62,9 @@ class SynheartWearAdapter {
     return _hrStream!.map((m) {
       final hr = m.getMetric(wearpkg.MetricType.hr)?.toDouble();
       List<double>? rr = m.rrMs;
+      // Fallback: create single RR interval estimate from HR if RR data is unavailable
       if ((rr == null || rr.isEmpty) && hr != null && hr > 0) {
-        rr =
-            _injectTestRr ? _synthesizeRrList(hr, m.timestamp) : [60000.0 / hr];
+        rr = [60000.0 / hr];
       }
       return (
         hr: hr,
@@ -75,19 +72,6 @@ class SynheartWearAdapter {
         ts: m.timestamp,
       );
     });
-  }
-
-  List<double> _synthesizeRrList(double hr, DateTime ts) {
-    final base = 60000.0 / hr;
-    final count = 40; // ~40 beats as a minimal window
-    final out = <double>[];
-    final seed = ts.millisecondsSinceEpoch % 1000;
-    for (int i = 0; i < count; i++) {
-      final phase = ((seed + i * 37) % 100) / 100.0;
-      final jitter = (phase - 0.5) * 60.0; // ±30 ms jitter
-      out.add((base + jitter).clamp(350.0, 1800.0));
-    }
-    return out;
   }
 
   Future<List<HRVMeasurement>> readCurrentHRV() async {
@@ -256,6 +240,17 @@ class SynheartWearAdapter {
 
     // Recovery rate is how close the final RMSSD is to baseline
     return (lastRMSSD / baselineRMSSD).clamp(0.0, 1.0);
+  }
+
+  /// Get biosignal stream for logging to dim_App_biosignals
+  /// Returns WearMetrics with all available biosignal data including HRV metrics
+  Stream<wearpkg.WearMetrics> getBiosignalStreamForLogging() {
+    if (_wear == null) {
+      return const Stream.empty();
+    }
+    // Use HRV stream as it contains more complete metrics including hrv_sdnn
+    // This stream emits HRV metrics which include SDNN, RMSSD, etc.
+    return _wear!.streamHRV(windowSize: const Duration(seconds: 10));
   }
 
   void dispose() {
