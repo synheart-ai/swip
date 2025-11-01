@@ -1,6 +1,10 @@
-# Synheart Wellness Impact Protocol (SWIP)
-
-> "Technology should adapt to human physiology, not the other way around."
+<div align="center">
+  <img src="./public/swip-logo-readme.png" alt="SWIP Protocol" width="400" />
+  
+  # Synheart Wellness Impact Protocol (SWIP)
+  
+  > "Technology should adapt to human physiology, not the other way around."
+</div>
 
 The **Synheart Wellness Impact Protocol (SWIP)** is an open, cross-platform framework that enables applications to quantitatively assess their impact on human wellness using biosignal-based metrics.
 

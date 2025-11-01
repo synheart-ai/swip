@@ -26,11 +26,6 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin device_info_plus, dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin", e);
     }
     try {
-      flutterEngine.getPlugins().add(new com.masicai.flutteronnxruntime.FlutterOnnxruntimePlugin());
-    } catch (Exception e) {
-      Log.e(TAG, "Error registering plugin flutter_onnxruntime, com.masicai.flutteronnxruntime.FlutterOnnxruntimePlugin", e);
-    }
-    try {
       flutterEngine.getPlugins().add(new cachet.plugins.health.HealthPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin health, cachet.plugins.health.HealthPlugin", e);
