@@ -33,7 +33,10 @@ dependencies:
   flutter_onnxruntime: ^1.5.2
   
   # Hardware connectivity via Synheart Wear
-  synheart_wear: ^0.1.2
+  synheart_wear:
+    git:
+      url: https://github.com/synheart-ai/synheart_wear.git
+      path: packages/synheart_wear
 
   # Emotion engine (Git)
   synheart_emotion:

@@ -701,6 +701,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  swip_core:
+    dependency: "direct main"
+    description:
+      path: "lib/packages/swip_core"
+      relative: true
+    source: path
+    version: "0.1.0"
   synheart_emotion:
     dependency: "direct main"
     description:
@@ -713,10 +720,11 @@ packages:
   synheart_wear:
     dependency: "direct main"
     description:
-      name: synheart_wear
-      sha256: c0ce1e3279b4f8369a16d5117906d26d4355a48a5f913d8a89a6c5cd2d9c9dca
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/synheart_wear"
+      ref: HEAD
+      resolved-ref: c88d0cb7accc1164f0f145f6c4967b4a24ebdd3e
+      url: "https://github.com/synheart-ai/synheart_wear.git"
+    source: git
     version: "0.1.2"
   term_glyph:
     dependency: transitive
