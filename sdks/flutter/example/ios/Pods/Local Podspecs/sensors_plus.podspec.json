@@ -17,9 +17,7 @@
   "documentation_url": "https://pub.dev/packages/sensors_plus",
   "source_files": "Classes/**/*",
   "dependencies": {
-    "Flutter": [
-
-    ]
+    "Flutter": []
   },
   "platforms": {
     "ios": "11.0"

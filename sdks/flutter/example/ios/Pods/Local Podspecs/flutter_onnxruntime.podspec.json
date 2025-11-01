@@ -15,9 +15,7 @@
   },
   "source_files": "Classes/**/*",
   "dependencies": {
-    "Flutter": [
-
-    ],
+    "Flutter": [],
     "onnxruntime-objc": [
       "1.22.0"
     ]

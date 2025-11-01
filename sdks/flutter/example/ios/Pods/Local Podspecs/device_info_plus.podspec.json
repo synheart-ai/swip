@@ -15,12 +15,10 @@
     "http": "https://github.com/fluttercommunity/plus_plugins/tree/main/packages/device_info_plus"
   },
   "documentation_url": "https://pub.dev/packages/device_info_plus",
-  "source_files": "Classes/**/*",
-  "public_header_files": "Classes/**/*.h",
+  "source_files": "device_info_plus/Sources/device_info_plus/**/*.{h,m}",
+  "public_header_files": "device_info_plus/Sources/device_info_plus/include/**/*.h",
   "dependencies": {
-    "Flutter": [
-
-    ]
+    "Flutter": []
   },
   "platforms": {
     "ios": "12.0"
@@ -30,7 +28,7 @@
   },
   "resource_bundles": {
     "device_info_plus_privacy": [
-      "PrivacyInfo.xcprivacy"
+      "device_info_plus/Sources/device_info_plus/PrivacyInfo.xcprivacy"
     ]
   }
 }
