@@ -10,7 +10,6 @@
 #endif
 #endif
 
-#import "DeviceIdentifiers.h"
 #import "FPPDeviceInfoPlusPlugin.h"
 
 FOUNDATION_EXPORT double device_info_plusVersionNumber;

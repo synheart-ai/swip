@@ -1,9 +1,9 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
-export "FLUTTER_ROOT=/Users/anwar/src/flutter"
-export "FLUTTER_APPLICATION_PATH=/Users/anwar/Desktop/Synheart/swip/sdks/flutter/example"
+export "FLUTTER_ROOT=/opt/homebrew/share/flutter"
+export "FLUTTER_APPLICATION_PATH=/Users/henok/Desktop/hack/swip/sdks/flutter/example"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
-export "FLUTTER_TARGET=/Users/anwar/Desktop/Synheart/swip/sdks/flutter/example/lib/main.dart"
+export "FLUTTER_TARGET=/Users/henok/Desktop/hack/swip/sdks/flutter/example/lib/main.dart"
 export "FLUTTER_BUILD_DIR=build"
 export "FLUTTER_BUILD_NAME=1.0.0"
 export "FLUTTER_BUILD_NUMBER=1"
@@ -11,4 +11,4 @@ export "DART_DEFINES=RkxVVFRFUl9WRVJTSU9OPTMuMzUuNg==,RkxVVFRFUl9DSEFOTkVMPXN0YW
 export "DART_OBFUSCATION=false"
 export "TRACK_WIDGET_CREATION=true"
 export "TREE_SHAKE_ICONS=false"
-export "PACKAGE_CONFIG=/Users/anwar/Desktop/Synheart/swip/sdks/flutter/example/.dart_tool/package_config.json"
+export "PACKAGE_CONFIG=/Users/henok/Desktop/hack/swip/sdks/flutter/example/.dart_tool/package_config.json"
